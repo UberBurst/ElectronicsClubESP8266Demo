@@ -1,0 +1,101 @@
+#include <ESP8266WiFi.h>
+#include <ESP8266WebServer.h>
+#include <WebSocketsServer.h>
+
+ESP8266WebServer server(80);
+WebSocketsServer webSocket(81);
+
+char webpage[] PROGMEM = R"=====(
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1" /> 
+  <script>
+var Socket
+//Initializing function, sets up the websocket object and retrieve the alarm time value
+function initial()
+    {
+    console.log("initial");
+    Socket = new WebSocket('ws://' + window.location.hostname + ':81/');
+    Socket.onmessage = function(event)
+        {
+        console.log("recieved");
+        console.log(event.data);
+        }
+    }
+<!--Sends the input on the remote-->
+function sendSignal(value)
+    {
+    console.log("send Signal");
+    Socket.send(value);
+    }
+  </script>
+</head>
+<body onload="javascript:initial()">
+<!--list of buttons and inputs-->
+<div class="btn-group"  style="width:100%">
+    <button style="width:20%" id = "Bright" onclick="sendSignal(this.value)" value = "00" >Bright </button>
+</div>
+<div class="slidecontainer">
+  <input type="range" min="1" max="255" onclick="sendSignal(this.value)" value="50" class="slider" id="myRange">
+</div>
+</form>
+</body>
+</html>
+)=====";
+
+void setup() {
+  pinMode(A0,OUTPUT);
+  // put your setup code here, to run once:
+Serial.begin(9600);
+WiFi.softAP("ESPsoftAP_01", "password4321") ? "Ready" : "Failed!";
+webSocket.begin();
+webSocket.onEvent(webSocketEvent);
+server.begin();
+server.on("/",[](){server.send(200, "text/html",webpage);});
+IPAddress IP = WiFi.softAPIP();
+Serial.print("AP IP address: ");
+Serial.println(IP);
+}
+
+void loop() {
+  server.handleClient();
+  webSocket.loop();
+}
+
+void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length)
+{
+    switch (type) 
+    {
+        case WStype_DISCONNECTED:             // if the websocket is disconnected
+            Serial.printf("[%u] Disconnected!\n", num);
+            break;
+        case WStype_CONNECTED: 
+            {              // if a new websocket connection is established
+            IPAddress ip = webSocket.remoteIP(num);
+            Serial.printf("[%u] Connected from %d.%d.%d.%d url: %s\n", num, ip[0], ip[1], ip[2], ip[3], payload);
+            }
+            break;
+            
+          case WStype_TEXT: 
+          Serial.printf("[%u] get Text: %s\n", num, payload);
+          int code =  atoi((const char*)payload); 
+          if(code == 0){
+          analogWrite(A0, 255);
+          delay(500);
+          analogWrite(A0,255);
+          }
+          else{
+            
+            analogWrite(5,code);
+            }
+          /*
+                        Serial.println("Ir signal Recieved");
+                        Serial.printf("[%u] get Text: %s\n", num, payload);
+                        int code =  atoi((const char*)payload); 
+            */
+            
+            break;
+            
+    }
+return;
+}
